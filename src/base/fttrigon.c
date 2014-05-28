@@ -29,7 +29,11 @@
   /*                                                                       */
   /*************************************************************************/
 
+#define _GNU_SOURCE 1
+
 #include <ft2build.h>
+#include <limits.h>
+#include <math.h>
 #include FT_INTERNAL_OBJECTS_H
 #include FT_INTERNAL_CALC_H
 #include FT_TRIGONOMETRY_H
@@ -296,12 +300,7 @@
   FT_EXPORT_DEF( FT_Fixed )
   FT_Cos( FT_Angle  angle )
   {
-    FT_Vector  v;
-
-
-    FT_Vector_Unit( &v, angle );
-
-    return v.x;
+    return lrintf(cosf(angle/65536.0 * (M_PI/180.0)) * 65536.0f);
   }
 
 
@@ -310,12 +309,7 @@
   FT_EXPORT_DEF( FT_Fixed )
   FT_Sin( FT_Angle  angle )
   {
-    FT_Vector  v;
-
-
-    FT_Vector_Unit( &v, angle );
-
-    return v.y;
+    return lrintf(sinf(angle/65536.0 * (M_PI/180.0)) * 65536.0f);
   }
 
 
@@ -324,12 +318,20 @@
   FT_EXPORT_DEF( FT_Fixed )
   FT_Tan( FT_Angle  angle )
   {
-    FT_Vector  v;
+    float t = tanf(angle/65536.0 * (M_PI/180.0)) * 65536.0f;
 
-
-    FT_Vector_Unit( &v, angle );
-
-    return FT_DivFix( v.y, v.x );
+    if ( t >= LONG_MAX )
+    {
+      return LONG_MAX;
+    }
+    else if ( t <= LONG_MIN )
+    {
+      return LONG_MIN;
+    }
+    else
+    {
+      return lrintf(t);
+    }
   }
 
 
@@ -339,18 +341,10 @@
   FT_Atan2( FT_Fixed  dx,
             FT_Fixed  dy )
   {
-    FT_Vector  v;
-
-
     if ( dx == 0 && dy == 0 )
       return 0;
 
-    v.x = dx;
-    v.y = dy;
-    ft_trig_prenorm( &v );
-    ft_trig_pseudo_polarize( &v );
-
-    return v.y;
+    return lrintf(atan2f(dy/65536.0f, dx/65536.0f) * (180.0/M_PI) * 65536.0);
   }
 
 
@@ -385,36 +379,13 @@
   FT_Vector_Rotate( FT_Vector*  vec,
                     FT_Angle    angle )
   {
-    FT_Int     shift;
-    FT_Vector  v;
-
-
-    if ( !vec || !angle )
-      return;
-
-    v = *vec;
-
-    if ( v.x == 0 && v.y == 0 )
-      return;
-
-    shift = ft_trig_prenorm( &v );
-    ft_trig_pseudo_rotate( &v, angle );
-    v.x = ft_trig_downscale( v.x );
-    v.y = ft_trig_downscale( v.y );
-
-    if ( shift > 0 )
+    if ( vec && angle && ( vec->x != 0 || vec->y != 0 ) )
     {
-      FT_Int32  half = (FT_Int32)1L << ( shift - 1 );
-
-
-      vec->x = ( v.x + half + FT_SIGN_LONG( v.x ) ) >> shift;
-      vec->y = ( v.y + half + FT_SIGN_LONG( v.y ) ) >> shift;
-    }
-    else
-    {
-      shift  = -shift;
-      vec->x = (FT_Pos)( (FT_ULong)v.x << shift );
-      vec->y = (FT_Pos)( (FT_ULong)v.y << shift );
+      float ang = angle/65536.0 * (M_PI/180.0);
+      float c = cosf(ang), s = sinf(ang);
+      FT_Pos x = lrintf((c * vec->x) - (s * vec->y));
+      vec->y = lrintf((s * vec->x) + (c * vec->y));
+      vec->x = x;
     }
   }
 
